@@ -4,7 +4,7 @@ using BlockNLPAlgorithms
 makedocs(
     sitename = "BlockNLPAlgorithms",
     format = Documenter.HTML(),
-    modules = [BlockNLPAlgorithms]
+    modules = [BlockNLPAlgorithms],
 )
 
 # Documenter can also automatically deploy documentation to gh-pages.
