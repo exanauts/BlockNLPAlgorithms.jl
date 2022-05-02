@@ -65,7 +65,6 @@ function dual_decomposition(
             )
             result = solve_block(dualized_block, opt.subproblem_solver, opt.verbosity)
             x[m.blocks[i].var_idx] = result.solution
-
             if result.elapsed_time > max_iter_time
                 max_iter_time = result.elapsed_time
             end
@@ -76,10 +75,10 @@ function dual_decomposition(
             opt.damping_param * opt.step_size .* (A * x - b)
 
         elapsed_time = time() - start_time
-        tired = elapsed_time > opt.max_wall_time || iter_count > opt.max_iter
+        tired = elapsed_time > opt.max_wall_time || iter_count >= opt.max_iter
         converged =
-            norm(obj_value - temp_obj_value) <= opt.obj_conv_tol &&
-            norm(A * sol - b) <= opt.feas_tol
+            norm(obj_value - temp_obj_value)/abs(obj_value) <= opt.obj_conv_tol &&
+            norm(A * x - b) <= opt.feas_tol
         temp_obj_value = deepcopy(obj_value)
         if opt.verbosity > 0
             @info log_row(

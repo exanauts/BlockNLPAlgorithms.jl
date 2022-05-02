@@ -73,12 +73,12 @@ add_links(block_mpc, N * n, links, F * [x0])
 @testset "Solve using dual-decomposition" begin
     solution = dual_decomposition(
         block_mpc,
-        max_iter = 50,
-        max_wall_time = 50.0,
-        update_scheme = "JACOBI",
+        max_iter = 5000,
+        step_size = 0.4,
+        max_wall_time = 300.0,
     )
 end
 @testset "Solve using ADMM" begin
     solution =
-        admm(block_mpc, max_iter = 50, max_wall_time = 50.0, update_scheme = "JACOBI")
+        admm(block_mpc, max_iter = 5000, step_size = 0.4, max_wall_time = 50.0, update_scheme = "GAUSS_SEIDEL")
 end
