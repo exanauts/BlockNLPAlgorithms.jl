@@ -18,7 +18,8 @@ function admm(
     start_time = time()
     nb = m.problem_size.block_counter # Number of blocks
     iter_count = 0
-
+    
+    kwargs = Dict(kwargs)
     # check if warm start primal-dual solutions are available 
     # otherwise initialize them with zero vectors
     if :primal_start ∈ keys(kwargs)
