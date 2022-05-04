@@ -16,7 +16,7 @@ function solve_block(
             result = madnlp(block, print_level = MadNLP.WARN)
         end
     elseif solver == "USER-DEFINED"
-        result = custom_solver()
+        result = custom_solver(block, block_id)
     end
     return result
 end
