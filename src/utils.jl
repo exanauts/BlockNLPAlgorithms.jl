@@ -1,4 +1,4 @@
-function custom_solver() end
+function custom_solver end
 
 function solve_block(
     block::AbstractNLPModel,
