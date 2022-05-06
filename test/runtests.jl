@@ -1,11 +1,27 @@
 using SparseArrays
 using LinearAlgebra
+using NLPModels
+using NLsolve
 using BlockNLPModels
 using BlockNLPAlgorithms
 using JuMP
 using NLPModelsJuMP
 using Test
+using MadNLP
+using Ipopt
+using NLPModelsIpopt
 
+"""
+Solves the following model predictive control problem:
+```math
+\\begin{aligned}
+  \\min_{x \\in \\mathbb{R}, u \\in \\mathbb{R}} \\quad & \\sum\\limits_{i = 1}^{N-1} x_i^2 + u_i^2 + x_N^2 \\\\
+  \\mathrm{subject \\, to} \\quad & x_{i+1} = x_i + u_i \\quad \\forall i \\in \\{ 1, \\ldots, N-1 \\} \\\\
+  & x_1 = x0 \\\\
+  & -1 \\leq u_i \\leq 1 \\quad \\forall i \\in \\{ 1, \\ldots, N-1 \\} \\\\
+  & -0.01 \\leq x_N \\leq 0.01
+\\end{aligned}
+"""
 A = fill(1, (1, 1));
 B = fill(1, (1, 1));
 x0 = 14
@@ -70,15 +86,79 @@ for i = 2:N
     end
 end
 add_links(block_mpc, N * n, links, F * [x0])
-# @testset "Solve using dual-decomposition" begin
-#     solution = dual_decomposition(
-#         block_mpc,
-#         max_iter = 5000,
-#         step_size = 0.4,
-#         max_wall_time = 300.0,
-#     )
-# end
-@testset "Solve using ADMM" begin
-    solution =
-        admm(block_mpc, primal_start = zeros(Float64, 2*N), max_iter = 5000, step_size = 0.4, max_wall_time = 50.0, update_scheme = "GAUSS_SEIDEL")
+
+dual_solution = dual_decomposition(
+    block_mpc,
+    max_iter = 5000,
+    step_size = 0.4,
+    max_wall_time = 300.0,
+    subproblem_solver = IpoptSolver(print_level = 0),
+    verbosity = 0,
+)
+admm_solution = admm(
+    block_mpc,
+    primal_start = zeros(Float64, 2 * N),
+    max_iter = 5000,
+    step_size = 0.4,
+    max_wall_time = 100.0,
+    update_scheme = :GAUSS_SEIDEL,
+    subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
+)
+
+@testset "Solve problem using off-the-shelf solvers" begin
+    @test round(admm_solution.objective) ≈ round(dual_solution.objective)
+end
+
+# Implement custom solver
+struct result
+    solution::Vector{Float64}
+    elapsed_time::Float64
+    objective::Float64
+    multipliers::Vector{Float64}
+end
+
+struct MySolver <: AbstractBlockSolver
+    options::Dict{Symbol,<:Any}
+    MySolver(; opts...) = new(Dict(opts))
+end
+
+function BlockNLPAlgorithms.optimize_block!(block::AbstractNLPModel, solver::MySolver)
+    start_time = time()
+    function f!(F, x)
+        F .= grad(block, x)
+    end
+
+    function j!(J, x)
+        J .=
+            sparse(hess_structure(block)[1], hess_structure(block)[2], hess_coord(block, x))
+    end
+
+    sol = nlsolve(f!, j!, zeros(Float64, block.meta.nvar)).zero
+    for i = 1:length(block.meta.nvar)
+        if sol[i] >= block.meta.uvar[i]
+            sol[i] = block.meta.uvar[i]
+        elseif sol[i] <= block.meta.lvar[i]
+            sol[i] = block.meta.lvar[i]
+        end
+    end
+    return result(
+        sol,
+        time() - start_time,
+        obj(block, sol),
+        zeros(Float64, block.meta.ncon),
+    )
+end
+
+my_solution = admm(
+    block_mpc,
+    primal_start = zeros(Float64, 2 * N),
+    max_iter = 5000,
+    step_size = 0.4,
+    max_wall_time = 50.0,
+    update_scheme = :GAUSS_SEIDEL,
+    subproblem_solver = MySolver(),
+)
+
+@testset "Solve problem using my solver" begin
+    @test ceil(my_solution.objective) ≈ round(admm_solution.objective)
 end

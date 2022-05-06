@@ -1,22 +1,15 @@
 abstract type AbstractOptions end
 
-function set_options!(opt::AbstractOptions, option_dict::Dict{Symbol,Any})
-    for (key, val) in option_dict
-        hasproperty(opt, key) || continue
-        T = fieldtype(typeof(opt), key)
-        val isa T ? setproperty!(opt, key, val) :
-        @error "Option $(key) needs to be of type $(T), hence discarded."
-        pop!(option_dict, key)
-    end
-end
-
-function set_options!(opt::AbstractOptions, option_dict::Dict{Symbol,Any}, kwargs)
-    !isempty(kwargs) && (
-        for (key, val) in kwargs
-            option_dict[key] = val
+function set_options!(opt::AbstractOptions, option_dict::Dict{Symbol,<:Any})
+    !isempty(option_dict) && (
+        for (key, val) in option_dict
+            hasproperty(opt, key) || continue
+            T = fieldtype(typeof(opt), key)
+            val isa T ? setproperty!(opt, key, val) :
+            @error "Option $(key) needs to be of type $(T), hence discarded."
+            pop!(option_dict, key)
         end
     )
-    set_options!(opt, option_dict)
 end
 
 @kwdef mutable struct Options <: AbstractOptions
@@ -31,8 +24,8 @@ end
     # Iteration options
     step_size::Float64 = 1e-1
     damping_param::Float64 = 1
-    update_scheme::String = "GAUSS_SEIDEL"
-    subproblem_solver::String = "MadNLP"
+    update_scheme::Symbol = :GAUSS_SEIDEL
+    subproblem_solver::AbstractBlockSolver = MadNLPSolver()
 
     # Termination options
     feas_tol::Float64 = 1e-4
