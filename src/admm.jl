@@ -1,6 +1,6 @@
 """
         admm(
-            m::AbstractBlockNLPModel;
+            model::AbstractBlockNLPModel;
             kwargs... 
         )
 Solves a `BlockNLPModel` with the ADMM algorithm.
@@ -11,92 +11,92 @@ Solves a `BlockNLPModel` with the ADMM algorithm.
 - `kwargs...`: options for the solver
 """
 function admm(
-    m::AbstractBlockNLPModel;
+    model::AbstractBlockNLPModel;
     option_dict::Dict{Symbol,Any} = Dict{Symbol,Any}(),
-    kwargs...,
+    options...,
 )
     start_time = time()
-    nb = m.problem_size.block_counter # Number of blocks
+    nb = model.problem_size.block_counter # Number of blocks
     iter_count = 0
     
-    kwargs = Dict(kwargs)
+    options = Dict(options)
     # check if warm start primal-dual solutions are available 
     # otherwise initialize them with zero vectors
-    if :primal_start ∈ keys(kwargs)
-        x = Vector{Float64}(kwargs[:primal_start])
-        pop!(kwargs, :primal_start)
+    if :primal_start ∈ keys(options)
+        x = Vector{Float64}(options[:primal_start])
+        pop!(options, :primal_start)
     else
-        x = zeros(Float64, m.problem_size.var_counter)
+        x = zeros(Float64, model.problem_size.var_counter)
     end
-    if :dual_start ∈ keys(kwargs)
-        y = Vector{Float64}(kwargs[:dual_start])
-        pop!(kwargs, :dual_start)
+    if :dual_start ∈ keys(options)
+        y = Vector{Float64}(options[:dual_start])
+        pop!(options, :dual_start)
     else
         y = zeros(Float64, n_constraints(m))
     end
 
     opt = Options(primal_start = x, dual_start = y)
-    set_options!(opt, option_dict, kwargs)
+    set_options!(opt, option_dict, options)
 
     tired = false
     converged = false
 
     if opt.verbosity > 0
         @info log_header(
-            [:iter, :objective, :Ax_b, :λ, :elapsed_time, :max_block_time],
+            [:iter, :objective, :norm(Ax-b), :norm(λ), :elapsed_time, :max_block_time],
             [Int, Float64, Float64, Float64, Float64, Float64],
         )
     end
-    obj_value = 0
+    obj_value = 0.0
     temp_obj_value = 1e10
-    elapsed_time = 0
+    elapsed_time = 0.0
 
     # Get the linking constraints
-    A = get_linking_matrix(m)
-    b = get_rhs_vector(m)
+    A = get_linking_matrix(model)
+    b = get_rhs_vector(model)
     while !(converged || tired)
         iter_count += 1
         if opt.update_scheme == "JACOBI"
             temp_x = zeros(Float64, length(x))
         end
         max_iter_time = 0
-        obj_value = 0 # reset to zero
+        obj_value = 0.0 # reset to zero
         for i = 1:nb
             if opt.update_scheme == "GAUSS_SEIDEL"
                 augmented_block = AugmentedNLPBlockModel(
-                    m.blocks[i],
-                    y[m.problem_size.con_counter+1:end],
+                    model.blocks[i],
+                    y[model.problem_size.con_counter+1:end],
                     opt.step_size,
                     A,
                     b,
                     x,
                 )
                 result = solve_block(augmented_block, opt.subproblem_solver, opt.verbosity)
-                x[m.blocks[i].var_idx] = result.solution
+                x[model.blocks[i].var_idx] = result.solution
             elseif opt.update_scheme == "JACOBI"
                 augmented_block = AugmentedNLPBlockModel(
-                    m.blocks[i],
-                    y[m.problem_size.con_counter+1:end],
+                    model.blocks[i],
+                    y[model.problem_size.con_counter+1:end],
                     opt.step_size,
                     A,
                     b,
                     x,
                 )
                 result = solve_block(augmented_block, opt.subproblem_solver, opt.verbosity)
-                temp_x[m.blocks[i].var_idx] = result.solution
+                temp_x[model.blocks[i].var_idx] = result.solution
             else
-                @error "ERROR: Please choose the update scheme as either 'JACOBI' or 'GAUSS_SEIDEL'"
+                error("Please choose the update scheme as either 'JACOBI' or 'GAUSS_SEIDEL'")
             end
             if result.elapsed_time > max_iter_time
                 max_iter_time = result.elapsed_time
             end
             obj_value += result.objective
-            y[m.blocks[i].con_idx] = result.multipliers
+            y[model.blocks[i].con_idx] = result.multipliers
         end
         if opt.update_scheme == "JACOBI"
             x = deepcopy(temp_x)
         end
-        y[m.problem_size.con_counter+1:end] .+=
+        y[model.problem_size.con_counter+1:end] .+=
             opt.damping_param * opt.step_size .* (A * x - b)
 
         elapsed_time = time() - start_time
@@ -111,7 +111,7 @@ function admm(
                     iter_count,
                     obj_value,
                     norm(A * x - b),
-                    norm(y[m.problem_size.con_counter+1:end]),
+                    norm(y[model.problem_size.con_counter+1:end]),
                     elapsed_time,
                     max_iter_time,
                 ],
@@ -129,7 +129,7 @@ function admm(
 
     return GenericExecutionStats(
         status,
-        FullSpaceModel(m),
+        FullSpaceModel(model),
         solution = x,
         objective = obj_value,
         iter = iter_count,
