@@ -6,7 +6,7 @@ function set_options!(opt::AbstractOptions, option_dict::Dict{Symbol,<:Any})
             hasproperty(opt, key) || continue
             T = fieldtype(typeof(opt), key)
             val isa T ? setproperty!(opt, key, val) :
-            @error "Option $(key) needs to be of type $(T), hence discarded."
+            @warn "Option $(key) needs to be of type $(T), hence discarded."
             pop!(option_dict, key)
         end
     )
