@@ -81,7 +81,7 @@ function admm(model::AbstractBlockNLPModel; options...)
             0.0,
         ],
     ))
-
+    ideal_wall_time = [] # For Jacobi update scheme, assuming parallelization
     while !(converged || tired)
         iter_count += 1
         opt.update_scheme == :JACOBI && (temp_x = zeros(Float64, length(x)))
@@ -133,6 +133,7 @@ function admm(model::AbstractBlockNLPModel; options...)
                 max_iter_time,
             ],
         ))
+        push!(ideal_wall_time, max_iter_time)
     end
 
     status = if converged
@@ -152,5 +153,6 @@ function admm(model::AbstractBlockNLPModel; options...)
         primal_feas = norm(A * x - b),
         elapsed_time = elapsed_time,
         multipliers = y,
+        solver_specific = Dict(:time => ideal_wall_time),
     )
 end
