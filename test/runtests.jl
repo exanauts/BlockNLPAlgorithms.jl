@@ -87,6 +87,10 @@ for i = 2:N
 end
 add_links(block_mpc, N * n, links, F * [x0])
 
+function BlockNLPAlgorithms.optimize_block!(block::AbstractNLPModel, solver::IpoptSolver)
+    result = ipopt(block; solver.options...)
+end
+
 dual_solution = dual_decomposition(
     block_mpc,
     max_iter = 5000,
@@ -95,6 +99,11 @@ dual_solution = dual_decomposition(
     subproblem_solver = IpoptSolver(print_level = 0),
     verbosity = 0,
 )
+
+function BlockNLPAlgorithms.optimize_block!(block::AbstractNLPModel, solver::MadNLPSolver)
+    result = madnlp(block; solver.options...)
+end
+
 admm_solution = admm(
     block_mpc,
     primal_start = zeros(Float64, 2 * N),
