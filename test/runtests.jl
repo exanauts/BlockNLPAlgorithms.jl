@@ -154,13 +154,13 @@ function BlockNLPAlgorithms.optimize_block!(block::AbstractNLPModel, solver::MyS
     )
 end
 
-my_solution = admm(
+my_solution = prox_admm(
     block_mpc,
     primal_start = zeros(Float64, 2 * N),
     max_iter = 5000,
     step_size = 0.4,
     max_wall_time = 50.0,
-    update_scheme = :GAUSS_SEIDEL,
+    update_scheme = :JACOBI,
     subproblem_solver = MySolver(),
 )
 
