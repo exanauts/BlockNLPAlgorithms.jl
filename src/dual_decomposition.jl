@@ -37,6 +37,10 @@ function dual_decomposition(model::AbstractBlockNLPModel; options...)
     # Prepare to start the solution algorithm
     A = get_linking_matrix(model)
     b = get_rhs_vector(model)
+    res = similar(b) # to store ||Ax-b||
+    mul!(res, A, x)
+    axpy!(-1.0, b, res)
+
     full_model = FullSpaceModel(model)
     dual_blocks = [
         DualizedNLPBlockModel(
@@ -67,12 +71,14 @@ function dual_decomposition(model::AbstractBlockNLPModel; options...)
     dual_obj_value = sum(obj(dual_blocks[i], x[model.blocks[i].var_idx]) for i = 1:nb)
     temp_dual_obj_value = 1e10
     elapsed_time = time() - start_time
+    max_subproblem_time = zeros(Float64, opt.max_iter)
+
     opt.verbosity > 0 && (@info log_row(
         Any[
             iter_count,
             obj_value,
             dual_obj_value,
-            norm(A * x - b),
+            norm(res),
             norm(y[model.problem_size.con_counter+1:end]),
             elapsed_time,
             0.0,
@@ -84,8 +90,9 @@ function dual_decomposition(model::AbstractBlockNLPModel; options...)
         max_iter_time = 0.0
         dual_obj_value = 0.0 # reset to zero
 
+        y_slice = @view y[model.problem_size.con_counter+1:end]
         for i = 1:nb
-            update_dual!(dual_blocks[i], y[model.problem_size.con_counter+1:end])
+            update_dual!(dual_blocks[i], y_slice)
             result = optimize_block!(dual_blocks[i], opt.subproblem_solver)
             x[model.blocks[i].var_idx] = result.solution
 
@@ -94,15 +101,18 @@ function dual_decomposition(model::AbstractBlockNLPModel; options...)
             y[model.blocks[i].con_idx] = result.multipliers
         end
 
-        y[model.problem_size.con_counter+1:end] .+=
-            opt.damping_param * opt.step_size .* (A * x - b)
+        # update res
+        mul!(res, A, x)
+        axpy!(-1.0, b, res)
+
+        y[model.problem_size.con_counter+1:end] += opt.damping_param * opt.step_size .* res
 
         elapsed_time = time() - start_time
 
         # evaluate stopping criteria
         tired = elapsed_time > opt.max_wall_time || iter_count >= opt.max_iter
         converged =
-            norm(dual_obj_value - temp_dual_obj_value) / abs(dual_obj_value) <=
+            abs(dual_obj_value - temp_dual_obj_value) / abs(dual_obj_value) <=
             opt.obj_conv_tol && norm(A * x - b) <= opt.feas_tol
 
         obj_value = obj(full_model, x)
@@ -112,12 +122,13 @@ function dual_decomposition(model::AbstractBlockNLPModel; options...)
                 iter_count,
                 obj_value,
                 dual_obj_value,
-                norm(A * x - b),
-                norm(y[model.problem_size.con_counter+1:end]),
+                norm(res),
+                norm(y_slice),
                 elapsed_time,
                 max_iter_time,
             ],
         ))
+        max_subproblem_time[iter_count] = max_iter_time
     end
 
     status = if converged
@@ -134,8 +145,9 @@ function dual_decomposition(model::AbstractBlockNLPModel; options...)
         solution = x,
         objective = obj_value,
         iter = iter_count,
-        primal_feas = norm(A * x - b),
+        primal_feas = norm(res),
         elapsed_time = elapsed_time,
         multipliers = y,
+        solver_specific = Dict(:max_subproblem_time => max_subproblem_time[1:iter_count]),
     )
 end

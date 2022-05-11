@@ -26,7 +26,7 @@ end
     damping_param::Float64 = 1
     update_scheme::Symbol = :GAUSS_SEIDEL
     subproblem_solver::AbstractBlockSolver = MadNLPSolver()
-    proximal_penalty::Union{AbstractArray, UniformScaling} = 1e-3.*I
+    proximal_penalty::Union{AbstractArray,UniformScaling} = 1e-3 .* I
 
     # Termination options
     feas_tol::Float64 = 1e-4
