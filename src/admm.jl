@@ -19,13 +19,13 @@ function admm(model::AbstractBlockNLPModel; options...)
     # check if warm start primal-dual solutions are available 
     # otherwise initialize them with zero vectors
     if :primal_start ∈ keys(options)
-        x = Vector{Float64}(options[:primal_start])
+        x = convert(Vector{Float64}, options[:primal_start])
         pop!(options, :primal_start)
     else
         x = zeros(Float64, model.problem_size.var_counter)
     end
     if :dual_start ∈ keys(options)
-        y = Vector{Float64}(options[:dual_start])
+        y = convert(Vector{Float64}, options[:dual_start])
         pop!(options, :dual_start)
     else
         y = zeros(Float64, n_constraints(model))
@@ -88,7 +88,14 @@ function admm(model::AbstractBlockNLPModel; options...)
         ],
     ))
     opt.update_scheme == :JACOBI && (temp_x = zeros(Float64, length(x)))
-
+    println(time() - start_time)
+    ips = []
+    # initialize interior point solver for each block
+    for i in 1:nb
+        push!(ips, MadNLP.InteriorPointSolver(aug_blocks[i], print_level = MadNLP.WARN, max_iter = 50000, linear_solver = MadNLPLapackCPU))
+        MadNLP.initialize!(ips[i].kkt)
+    end
+    println(time() - start_time)
     while !(converged || tired)
         iter_count += 1
         opt.update_scheme == :JACOBI && (fill!(temp_x, 0.0))
@@ -96,15 +103,15 @@ function admm(model::AbstractBlockNLPModel; options...)
         aug_obj_value = 0.0 # reset to zero
 
         y_slice = @view y[model.problem_size.con_counter+1:end]
+        iter_count == 1 && println(time() - start_time)
         for i = 1:nb
             update_primal!(aug_blocks[i], x)
             update_dual!(aug_blocks[i], y_slice)
-
+            result = optimize_block!(ips[i], opt.subproblem_solver)
+            iter_count == 1 && println(time() - start_time)
             if opt.update_scheme == :GAUSS_SEIDEL
-                result = optimize_block!(aug_blocks[i], opt.subproblem_solver)
                 x[model.blocks[i].var_idx] = result.solution
             elseif opt.update_scheme == :JACOBI
-                result = optimize_block!(aug_blocks[i], opt.subproblem_solver)
                 temp_x[model.blocks[i].var_idx] = result.solution
             else
                 error("Please choose the update scheme as :JACOBI or :GAUSS_SEIDEL")

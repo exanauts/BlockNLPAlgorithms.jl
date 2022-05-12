@@ -8,6 +8,7 @@ using BlockNLPModels
 using LinearAlgebra
 using SparseArrays
 import Base: @kwdef
+using MadNLP, MadNLPHSL
 
 export AbstractBlockSolver # for custom solvers
 export admm, dual_decomposition, prox_admm

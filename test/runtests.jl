@@ -8,8 +8,6 @@ using JuMP
 using NLPModelsJuMP
 using Test
 using MadNLP
-using Ipopt
-using NLPModelsIpopt
 
 """
 Solves the following model predictive control problem:
@@ -87,18 +85,18 @@ for i = 2:N
 end
 add_links(block_mpc, N * n, links, F * [x0])
 
-function BlockNLPAlgorithms.optimize_block!(block::AbstractNLPModel, solver::MadNLPSolver)
-    result = madnlp(block; solver.options...)
+function BlockNLPAlgorithms.optimize_block!(block, solver::MadNLPSolver)
+    MadNLP.optimize!(block)
 end
 
-dual_solution = dual_decomposition(
-    block_mpc,
-    max_iter = 5000,
-    step_size = 0.4,
-    max_wall_time = 300.0,
-    subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
-    verbosity = 0,
-)
+# dual_solution = dual_decomposition(
+#     block_mpc,
+#     max_iter = 5000,
+#     step_size = 0.4,
+#     max_wall_time = 300.0,
+#     subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
+#     verbosity = 0,
+# )
 
 admm_solution = admm(
     block_mpc,
@@ -107,6 +105,7 @@ admm_solution = admm(
     step_size = 0.4,
     max_wall_time = 100.0,
     update_scheme = :GAUSS_SEIDEL,
+    verbosity = 0,
     subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
 )
 
