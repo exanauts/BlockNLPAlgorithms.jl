@@ -1,5 +1,10 @@
 module BlockNLPAlgorithms
+abstract type AbstractBlockNLPSolver end
 abstract type AbstractBlockSolver end
+
+struct ADMM <: AbstractBlockNLPSolver end
+struct DualDecomposition <: AbstractBlockNLPSolver end
+struct ProxADMM <: AbstractBlockNLPSolver end
 
 using NLPModels
 using Logging
@@ -10,10 +15,11 @@ using SparseArrays
 import Base: @kwdef
 using MadNLP, MadNLPHSL
 
-export AbstractBlockSolver # for custom solvers
-export admm, dual_decomposition, prox_admm
+export AbstractBlockSolver # for designing custom solvers
+export solve
 export MadNLPSolver, IpoptSolver
 
+include("main_solver.jl")
 include("options.jl")
 include("block_solvers.jl")
 include("admm.jl")

@@ -59,7 +59,9 @@ for i = 1:2N
         mpc_block = Model()
         @variable(mpc_block, x[1:n])
         if i == 2N
-            @constraint(mpc_block, -0.01 <= x[1] <= 0.01)
+            set_lower_bound(x[1], -0.001)
+            set_upper_bound(x[1], 0.001)
+            # @constraint(mpc_block, -0.001 <= x[1] <= 0.001)
         end
         @objective(mpc_block, Min, dot(x, Q, x))
         nlp = MathOptNLPModel(mpc_block)
@@ -85,8 +87,27 @@ for i = 2:N
 end
 add_links(block_mpc, N * n, links, F * [x0])
 
-function BlockNLPAlgorithms.optimize_block!(block, solver::MadNLPSolver)
-    MadNLP.optimize!(block)
+function BlockNLPAlgorithms.initialize_solver(solver::MadNLPSolver, nlp_blocks::Vector{<:AbstractNLPModel})
+    nb = length(nlp_blocks)
+    ips = Vector{MadNLP.InteriorPointSolver}(undef, nb)
+    for i in 1:nb
+        ips[i] = MadNLP.InteriorPointSolver(nlp_blocks[i]; solver.options...)
+        MadNLP.initialize!(ips[i].kkt)
+        MadNLP.initialize!(ips[i])
+    end
+    return ips
+end
+
+function BlockNLPAlgorithms.optimize_block!(initialized_block::MadNLP.InteriorPointSolver, results::BlockNLPAlgorithms.BlockSolution)
+    # reset counters
+    initialized_block.cnt = MadNLP.Counters(start_time = time())
+    # solve
+    optimal_solution = MadNLP.optimize!(initialized_block)
+    # overwrite results
+    field_names = fieldnames(typeof(results))
+    for i in 1:length(field_names)
+        setproperty!(results, field_names[i], getproperty(optimal_solution, field_names[i]))
+    end
 end
 
 # dual_solution = dual_decomposition(
@@ -98,71 +119,74 @@ end
 #     verbosity = 0,
 # )
 
-admm_solution = admm(
+@profile admm_solution = solve(
     block_mpc,
+    BlockNLPAlgorithms.ADMM,
     primal_start = zeros(Float64, 2 * N),
     max_iter = 5000,
-    step_size = 0.4,
+    step_size = 0.5,
     max_wall_time = 100.0,
     update_scheme = :GAUSS_SEIDEL,
-    verbosity = 0,
+    verbosity = 1,
     subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
 )
 
-@testset "Solve problem using off-the-shelf solvers" begin
-    @test round(admm_solution.objective) ≈ round(dual_solution.objective)
-end
+pprof()
 
-# Implement custom solver
-struct result
-    solution::Vector{Float64}
-    elapsed_time::Float64
-    objective::Float64
-    multipliers::Vector{Float64}
-end
+# @testset "Solve problem using off-the-shelf solvers" begin
+#     @test round(admm_solution.objective) ≈ round(dual_solution.objective)
+# end
 
-struct MySolver <: AbstractBlockSolver
-    options::Dict{Symbol,<:Any}
-    MySolver(; opts...) = new(Dict(opts))
-end
+# # Implement custom solver
+# struct result
+#     solution::Vector{Float64}
+#     elapsed_time::Float64
+#     objective::Float64
+#     multipliers::Vector{Float64}
+# end
 
-function BlockNLPAlgorithms.optimize_block!(block::AbstractNLPModel, solver::MySolver)
-    start_time = time()
-    function f!(F, x)
-        F .= grad(block, x)
-    end
+# struct MySolver <: AbstractBlockSolver
+#     options::Dict{Symbol,<:Any}
+#     MySolver(; opts...) = new(Dict(opts))
+# end
 
-    function j!(J, x)
-        J .=
-            sparse(hess_structure(block)[1], hess_structure(block)[2], hess_coord(block, x))
-    end
+# function BlockNLPAlgorithms.optimize_block!(block::AbstractNLPModel, solver::MySolver)
+#     start_time = time()
+#     function f!(F, x)
+#         F .= grad(block, x)
+#     end
 
-    sol = nlsolve(f!, j!, zeros(Float64, block.meta.nvar)).zero
-    for i = 1:length(block.meta.nvar)
-        if sol[i] >= block.meta.uvar[i]
-            sol[i] = block.meta.uvar[i]
-        elseif sol[i] <= block.meta.lvar[i]
-            sol[i] = block.meta.lvar[i]
-        end
-    end
-    return result(
-        sol,
-        time() - start_time,
-        obj(block, sol),
-        zeros(Float64, block.meta.ncon),
-    )
-end
+#     function j!(J, x)
+#         J .=
+#             sparse(hess_structure(block)[1], hess_structure(block)[2], hess_coord(block, x))
+#     end
 
-my_solution = prox_admm(
-    block_mpc,
-    primal_start = zeros(Float64, 2 * N),
-    max_iter = 5000,
-    step_size = 0.4,
-    max_wall_time = 50.0,
-    update_scheme = :JACOBI,
-    subproblem_solver = MySolver(),
-)
+#     sol = nlsolve(f!, j!, zeros(Float64, block.meta.nvar)).zero
+#     for i = 1:length(block.meta.nvar)
+#         if sol[i] >= block.meta.uvar[i]
+#             sol[i] = block.meta.uvar[i]
+#         elseif sol[i] <= block.meta.lvar[i]
+#             sol[i] = block.meta.lvar[i]
+#         end
+#     end
+#     return result(
+#         sol,
+#         time() - start_time,
+#         obj(block, sol),
+#         zeros(Float64, block.meta.ncon),
+#     )
+# end
 
-@testset "Solve problem using my solver" begin
-    @test ceil(my_solution.objective) ≈ round(admm_solution.objective)
-end
+# my_solution = prox_admm(
+#     block_mpc,
+#     primal_start = zeros(Float64, 2 * N),
+#     max_iter = 5000,
+#     step_size = 0.4,
+#     max_wall_time = 50.0,
+#     update_scheme = :JACOBI,
+#     subproblem_solver = MySolver(),
+# )
+
+# @testset "Solve problem using my solver" begin
+#     @test ceil(my_solution.objective) ≈ round(admm_solution.objective)
+# end

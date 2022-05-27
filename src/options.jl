@@ -22,7 +22,7 @@ end
     dual_start::Vector{Float64}
 
     # Iteration options
-    step_size::Float64 = 1e-1
+    step_size::Float64 = 5e-1
     damping_param::Float64 = 1
     update_scheme::Symbol = :GAUSS_SEIDEL
     subproblem_solver::AbstractBlockSolver = MadNLPSolver()
