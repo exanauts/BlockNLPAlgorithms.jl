@@ -13,7 +13,6 @@ using BlockNLPModels
 using LinearAlgebra
 using SparseArrays
 import Base: @kwdef
-using MadNLP, MadNLPHSL
 
 export AbstractBlockSolver # for designing custom solvers
 export solve
