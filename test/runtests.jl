@@ -87,10 +87,13 @@ for i = 2:N
 end
 add_links(block_mpc, N * n, links, F * [x0])
 
-function BlockNLPAlgorithms.initialize_solver(solver::MadNLPSolver, nlp_blocks::Vector{<:AbstractNLPModel})
+function BlockNLPAlgorithms.initialize_solver(
+    solver::MadNLPSolver,
+    nlp_blocks::Vector{<:AbstractNLPModel},
+)
     nb = length(nlp_blocks)
     ips = Vector{MadNLP.InteriorPointSolver}(undef, nb)
-    for i in 1:nb
+    for i = 1:nb
         ips[i] = MadNLP.InteriorPointSolver(nlp_blocks[i]; solver.options...)
         MadNLP.initialize!(ips[i].kkt)
         MadNLP.initialize!(ips[i])
@@ -98,95 +101,58 @@ function BlockNLPAlgorithms.initialize_solver(solver::MadNLPSolver, nlp_blocks::
     return ips
 end
 
-function BlockNLPAlgorithms.optimize_block!(initialized_block::MadNLP.InteriorPointSolver, results::BlockNLPAlgorithms.BlockSolution)
+function BlockNLPAlgorithms.optimize_block!(
+    initialized_block::MadNLP.InteriorPointSolver,
+    results::BlockNLPAlgorithms.BlockSolution,
+)
     # reset counters
     initialized_block.cnt = MadNLP.Counters(start_time = time())
     # solve
     optimal_solution = MadNLP.optimize!(initialized_block)
     # overwrite results
     field_names = fieldnames(typeof(results))
-    for i in 1:length(field_names)
+    for i = 1:length(field_names)
         setproperty!(results, field_names[i], getproperty(optimal_solution, field_names[i]))
     end
 end
 
-# dual_solution = dual_decomposition(
-#     block_mpc,
-#     max_iter = 5000,
-#     step_size = 0.4,
-#     max_wall_time = 300.0,
-#     subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
-#     verbosity = 0,
-# )
-
-@profile admm_solution = solve(
+dual_solution = solve(
     block_mpc,
-    BlockNLPAlgorithms.ADMM,
-    primal_start = zeros(Float64, 2 * N),
+    BlockNLPAlgorithms.DualDecomposition;
     max_iter = 5000,
-    step_size = 0.5,
+    step_size_min = 0.4,
+    max_wall_time = 300.0,
+    subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
+    verbosity = 0,
+)
+
+admm_solution = solve(
+    block_mpc,
+    BlockNLPAlgorithms.ADMM;
+    primal_start = zeros(Float64, 2 * N),
+    max_iter = 1000,
+    dynamic_step_size = true,
+    step_size_min = 0.5,
     max_wall_time = 100.0,
     update_scheme = :GAUSS_SEIDEL,
     verbosity = 1,
     subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
 )
 
-pprof()
 
-# @testset "Solve problem using off-the-shelf solvers" begin
-#     @test round(admm_solution.objective) ≈ round(dual_solution.objective)
-# end
+prox_admm_solution = solve(
+    block_mpc,
+    BlockNLPAlgorithms.ProxADMM;
+    primal_start = zeros(Float64, 2 * N),
+    max_iter = 5000,
+    step_size_min = 0.5,
+    max_wall_time = 50.0,
+    update_scheme = :JACOBI,
+    subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
+)
 
-# # Implement custom solver
-# struct result
-#     solution::Vector{Float64}
-#     elapsed_time::Float64
-#     objective::Float64
-#     multipliers::Vector{Float64}
-# end
-
-# struct MySolver <: AbstractBlockSolver
-#     options::Dict{Symbol,<:Any}
-#     MySolver(; opts...) = new(Dict(opts))
-# end
-
-# function BlockNLPAlgorithms.optimize_block!(block::AbstractNLPModel, solver::MySolver)
-#     start_time = time()
-#     function f!(F, x)
-#         F .= grad(block, x)
-#     end
-
-#     function j!(J, x)
-#         J .=
-#             sparse(hess_structure(block)[1], hess_structure(block)[2], hess_coord(block, x))
-#     end
-
-#     sol = nlsolve(f!, j!, zeros(Float64, block.meta.nvar)).zero
-#     for i = 1:length(block.meta.nvar)
-#         if sol[i] >= block.meta.uvar[i]
-#             sol[i] = block.meta.uvar[i]
-#         elseif sol[i] <= block.meta.lvar[i]
-#             sol[i] = block.meta.lvar[i]
-#         end
-#     end
-#     return result(
-#         sol,
-#         time() - start_time,
-#         obj(block, sol),
-#         zeros(Float64, block.meta.ncon),
-#     )
-# end
-
-# my_solution = prox_admm(
-#     block_mpc,
-#     primal_start = zeros(Float64, 2 * N),
-#     max_iter = 5000,
-#     step_size = 0.4,
-#     max_wall_time = 50.0,
-#     update_scheme = :JACOBI,
-#     subproblem_solver = MySolver(),
-# )
-
-# @testset "Solve problem using my solver" begin
-#     @test ceil(my_solution.objective) ≈ round(admm_solution.objective)
-# end
+@testset "Check solver accuracy" begin
+    @test ceil(prox_admm_solution.objective) ≈
+          round(admm_solution.objective) ≈
+          round(dual_solution.objective)
+end

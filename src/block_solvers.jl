@@ -3,6 +3,8 @@ mutable struct BlockSolution
     elapsed_time::Float64
     objective::Float64
     multipliers::Vector{Float64}
+    multipliers_L::Vector{Float64}
+    multipliers_U::Vector{Float64}
 end
 
 struct MadNLPSolver <: AbstractBlockSolver
