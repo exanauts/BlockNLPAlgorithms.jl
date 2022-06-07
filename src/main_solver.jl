@@ -1,288 +1,121 @@
-mutable struct ModelParams
-    method::Type{<:AbstractBlockNLPSolver}
+function solve!(params::ModelParams)
+    nb = params.nb # Number of blocks
+    x = params.x
+    y = params.y
+    y_L = params.y_L
+    y_U = params.y_U
 
-    opt::AbstractOptions
-    start_time::Float64
+    ρ = deepcopy(params.opt.step_size_min) # initialize ρ as the minimum allowed step size value
+    μ = 10 # from Boyd's book (make options later)
+    τ = 2
 
-    x::Vector{Float64} # primal solution
-    y::Vector{Float64} # dual multipliers
-    y_L::Vector{Float64} # bound dual multipliers
-    y_U::Vector{Float64}
+    iter_count = 0
+    params.opt.update_scheme == :JACOBI && (temp_x = zeros(Float64, length(x)))
+    elapsed_time = 0.0
 
-    # model
-    nb::Integer
-    model::AbstractBlockNLPModel
-    init_blocks::Vector{AbstractNLPModel}
-    init_obj_value::Float64
-    full_model::AbstractNLPModel
-    obj_value::Float64
-    A::AbstractMatrix
-    b::AbstractVector
-    pr_res::AbstractVector # Ax-b
-    jac::Tuple{AbstractVector,AbstractVector,AbstractVector}
-    JTy::AbstractVector
-    dl_res::AbstractVector
+    while !(params.converged || params.tired)
+        iter_count += 1
+        params.opt.update_scheme == :JACOBI && (fill!(temp_x, 0.0))
+        max_iter_time = 0.0
+        params.init_obj_value = 0.0 # reset to zero
 
-    tired::Bool
-    converged::Bool
-    max_subproblem_time::Vector{Float64}
+        y_slice = @view y[params.model.problem_size.con_counter+1:end]
 
-    init_solver::AbstractVector
-    results::Vector{BlockSolution}
-end
+        for i = 1:nb
+            params.method != DualDecomposition && update_primal!(params.init_blocks[i], x)
+            update_dual!(params.init_blocks[i], y_slice)
+            params.method != DualDecomposition &&
+                params.opt.dynamic_step_size == true &&
+                update_rho!(params.init_blocks[i], ρ)
 
-"""
-        solve(
-            model::AbstractBlockNLPModel,
-            method::AbstractBlockNLPSolver;
-            options...
-        )
-Solves a `BlockNLPModel` with the specified `AbstractBlockNLPSolver` method.
+            optimize_block!(params.init_solver[i], params.results[i])
 
-# Arguments
+            if params.opt.update_scheme == :GAUSS_SEIDEL
+                x[params.model.blocks[i].var_idx] = params.results[i].solution
+            elseif params.opt.update_scheme == :JACOBI
+                temp_x[params.model.blocks[i].var_idx] = params.results[i].solution
+            else
+                error("Please choose the update scheme as :JACOBI or :GAUSS_SEIDEL")
+            end
 
-- `m::AbstractBlockNLPModel`: identifier for the `BlockNLPModel` 
-- `method::AbstractBlockNLPSolver`: solution algorithm
-- `options`: solver options
-"""
-function solve(
-    model::AbstractBlockNLPModel,
-    method::Type{<:AbstractBlockNLPSolver};
-    options...,
-)
-    init_model = initialize(model, method; options...)
-    return solve!(init_model)
-end
+            params.results[i].elapsed_time > max_iter_time &&
+                (max_iter_time = params.results[i].elapsed_time)
+            params.init_obj_value += params.results[i].objective
+            y[params.model.blocks[i].con_idx] = params.results[i].multipliers
+            y_L[params.model.blocks[i].var_idx] = params.results[i].multipliers_L
+            y_U[params.model.blocks[i].var_idx] = params.results[i].multipliers_U
+        end
+        params.opt.update_scheme == :JACOBI && (copyto!(x, temp_x))
 
-"""
-        solve(
-            model::AbstractBlockNLPModel,
-            method::AbstractBlockNLPSolver;
-            options...
-        )
-Solves a `BlockNLPModel` with the specified `AbstractBlockNLPSolver` method.
+        # update res
+        mul!(params.pr_res, params.A, x)
+        axpy!(-1.0, params.b, params.pr_res)
 
-# Arguments
+        y[params.model.problem_size.con_counter+1:end] +=
+            params.opt.damping_param * ρ .* params.pr_res
 
-- `m::AbstractBlockNLPModel`: identifier for the `BlockNLPModel` 
-- `method::AbstractBlockNLPSolver`: solution algorithm
-- `options`: solver options
-"""
-function initialize(
-    model::AbstractBlockNLPModel,
-    method::Type{<:AbstractBlockNLPSolver};
-    options...,
-)
-    start_time = time()
+        # update dual_res
+        jac_coord!(params.full_model, x, params.jac[3])
+        coo_prod!(params.jac[2], params.jac[1], params.jac[3], y, params.JTy)
+        grad!(params.full_model, x, params.dl_res)
+        params.dl_res += params.JTy - y_L + y_U
+        elapsed_time = time() - params.start_time
 
-    nb = model.problem_size.block_counter
-    options = Dict(options)
+        # update step-size
+        if params.opt.dynamic_step_size == true
+            norm(params.pr_res) > μ * norm(params.dl_res) && (ρ = ρ * τ)
+            norm(params.dl_res) > μ * norm(params.pr_res) && (ρ = ρ / τ)
 
-    # check if warm start primal-dual solutions are available 
-    # otherwise initialize them with zero vectors
-    if :primal_start ∈ keys(options)
-        x = convert(Vector{Float64}, options[:primal_start])
-        pop!(options, :primal_start)
+            ρ < params.opt.step_size_min && (ρ = params.opt.step_size_min)
+            ρ > params.opt.step_size_max && (ρ = params.opt.step_size_max)
+        end
+
+        # evaluate stopping criteria
+        params.tired =
+            elapsed_time > params.opt.max_wall_time || iter_count >= params.opt.max_iter
+        params.converged =
+            norm(params.dl_res) <= params.opt.dl_feas_tol &&
+            norm(params.pr_res) <= params.opt.pr_feas_tol
+
+        params.obj_value = obj(params.full_model, x)
+
+        params.opt.verbosity > 0 && (@info log_row(
+            Any[
+                iter_count,
+                params.obj_value,
+                params.init_obj_value,
+                norm(params.pr_res),
+                norm(params.dl_res),
+                ρ,
+                elapsed_time,
+                max_iter_time,
+            ],
+        ))
+        params.max_subproblem_time[iter_count] = max_iter_time
+    end
+
+    status = if params.converged
+        :first_order
+    elseif elapsed_time > params.opt.max_wall_time
+        :max_time
     else
-        x = zeros(Float64, model.problem_size.var_counter)
-    end
-    if :dual_start ∈ keys(options)
-        y = convert(Vector{Float64}, options[:dual_start])
-        pop!(options, :dual_start)
-    else
-        y = zeros(Float64, n_constraints(model))
+        :max_eval
     end
 
-    opt = Options(primal_start = x, dual_start = y)
-    set_options!(opt, options)
-    initialized_blocks = initialize_blocks(model, method, opt)
-    full_model = FullSpaceModel(model)
-
-    # Initialize bound dual variables with zeros
-    y_L = zeros(Float64, get_nvar(full_model))
-    y_U = zeros(Float64, get_nvar(full_model))
-
-    obj_value = obj(full_model, x)
-    init_obj_value =
-        sum(obj(initialized_blocks[i], x[model.blocks[i].var_idx]) for i = 1:nb)
-
-    A = get_linking_matrix(model)
-    b = get_rhs_vector(model)
-    pr_res = similar(b) # to store ||Ax-b||
-    mul!(pr_res, A, x)
-    axpy!(-1.0, b, pr_res)
-
-    dl_res = grad(full_model, x)
-
-    # Get the J^T y product
-    # To-do: find a more efficient way to store jacobian info
-    jac = (
-        jac_structure(full_model)[1],
-        jac_structure(full_model)[2],
-        jac_coord(full_model, x),
+    return GenericExecutionStats(
+        status,
+        params.full_model,
+        solution = x,
+        objective = params.obj_value,
+        iter = iter_count,
+        primal_feas = norm(params.pr_res),
+        dual_feas = norm(params.dl_res),
+        elapsed_time = elapsed_time,
+        multipliers = y,
+        multipliers_L = y_L,
+        multipliers_U = y_U,
+        solver_specific = Dict(
+            :max_subproblem_time => params.max_subproblem_time[1:iter_count],
+        ),
     )
-    JTy = similar(dl_res)
-    coo_prod!(jac[2], jac[1], jac[3], y, JTy)
-    dl_res += JTy + y_L - y_U
-
-    tired = false
-    converged = false
-
-    # initialize interior point solver for each block
-    initialized_block_solvers = initialize_solver(opt.subproblem_solver, initialized_blocks)
-
-    # initialize BlockSolution objects to store results for each block
-    block_results = [
-        BlockSolution(
-            zeros(Float64, get_nvar(initialized_blocks[i])),
-            0.0,
-            0.0,
-            zeros(Float64, get_ncon(initialized_blocks[i])),
-            zeros(Float64, get_nvar(initialized_blocks[i])),
-            zeros(Float64, get_nvar(initialized_blocks[i])),
-        ) for i = 1:nb
-    ]
-
-    opt.verbosity > 0 && (@info log_row(
-        Any[
-            0,
-            obj_value,
-            init_obj_value,
-            norm(pr_res),
-            norm(dl_res),
-            opt.step_size_min,
-            time()-start_time,
-            0.0,
-        ],
-    ))
-
-    return ModelParams(
-        method,
-        opt,
-        start_time,
-        x,
-        y,
-        y_L,
-        y_U,
-        nb,
-        model,
-        initialized_blocks,
-        init_obj_value,
-        full_model,
-        obj_value,
-        A,
-        b,
-        pr_res,
-        jac,
-        JTy,
-        dl_res,
-        tired,
-        converged,
-        zeros(Float64, opt.max_iter),
-        initialized_block_solvers,
-        block_results,
-    )
-end
-
-function initialize_blocks(model::AbstractBlockNLPModel, ::Type{ADMM}, opt::AbstractOptions)
-    nb = model.problem_size.block_counter
-
-    if opt.verbosity > 0
-        @info log_header(
-            [
-                :iter,
-                :objective,
-                Symbol(:(aug_f(x))),
-                :pr_inf,
-                :dl_inf,
-                :ρ,
-                :elapsed_time,
-                :max_block_time,
-            ],
-            [Int, Float64, Float64, Float64, Float64, Float64, Float64, Float64],
-        )
-    end
-
-    return [
-        AugmentedNLPBlockModel(
-            model.blocks[i],
-            opt.dual_start[model.problem_size.con_counter+1:end],
-            opt.step_size_min,
-            get_linking_matrix(model),
-            get_rhs_vector(model),
-            opt.primal_start,
-        ) for i = 1:nb
-    ]
-end
-
-function initialize_blocks(
-    model::AbstractBlockNLPModel,
-    ::Type{DualDecomposition},
-    opt::AbstractOptions,
-)
-    nb = model.problem_size.block_counter
-
-    if opt.verbosity > 0
-        @info log_header(
-            [
-                :iter,
-                :objective,
-                Symbol(:(dual_f(x))),
-                :pr_inf,
-                :dl_inf,
-                :ρ,
-                :elapsed_time,
-                :max_block_time,
-            ],
-            [Int, Float64, Float64, Float64, Float64, Float64, Float64, Float64],
-        )
-    end
-
-    return [
-        DualizedNLPBlockModel(
-            model.blocks[i].problem_block,
-            opt.dual_start[model.problem_size.con_counter+1:end],
-            get_linking_matrix(model)[:, model.blocks[i].var_idx],
-        ) for i = 1:nb
-    ]
-end
-
-function initialize_blocks(
-    model::AbstractBlockNLPModel,
-    ::Type{ProxADMM},
-    opt::AbstractOptions,
-)
-    nb = model.problem_size.block_counter
-
-    if opt.verbosity > 0
-        @info log_header(
-            [
-                :iter,
-                :objective,
-                Symbol(:(prox_aug_f(x))),
-                :pr_inf,
-                :dl_inf,
-                :ρ,
-                :elapsed_time,
-                :max_block_time,
-            ],
-            [Int, Float64, Float64, Float64, Float64, Float64, Float64, Float64],
-        )
-    end
-
-    return [
-        ProxAugmentedNLPBlockModel(
-            model.blocks[i],
-            opt.dual_start[model.problem_size.con_counter+1:end],
-            opt.step_size_min,
-            get_linking_matrix(model),
-            get_rhs_vector(model),
-            opt.primal_start,
-            sparse(
-                opt.proximal_penalty,
-                model.blocks[i].meta.nvar,
-                model.blocks[i].meta.nvar,
-            ),
-        ) for i = 1:nb
-    ]
 end

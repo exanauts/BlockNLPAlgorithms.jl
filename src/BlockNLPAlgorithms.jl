@@ -18,11 +18,10 @@ using MadNLP, MadNLPHSL
 export AbstractBlockSolver # for designing custom solvers
 export solve
 export MadNLPSolver, IpoptSolver
+
 include("block_solvers.jl")
 include("options.jl")
+include("model_params.jl")
 include("main_solver.jl")
-include("admm.jl")
-include("prox_admm.jl")
-include("dual_decomposition.jl")
 
 end # module
