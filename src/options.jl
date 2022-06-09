@@ -32,7 +32,7 @@ end
 
     # Termination options
     pr_feas_tol::Float64 = 1e-4
-    dl_feas_tol::Float64 = 1e-4
+    du_feas_tol::Float64 = 1e-4
     max_iter::Int = 100
     max_wall_time::Float64 = 600.0
 end

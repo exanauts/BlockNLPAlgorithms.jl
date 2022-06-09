@@ -1,11 +1,12 @@
-function solve!(params::ModelParams)
-    nb = params.nb # Number of blocks
+function solve!(params::SolverInstance)
+    nb = params.nb # number of blocks
+    n_con = params.model.problem_size.con_counter # number of constraints
     x = params.x
     y = params.y
     y_L = params.y_L
     y_U = params.y_U
 
-    ρ = deepcopy(params.opt.step_size_min) # initialize ρ as the minimum allowed step size value
+    ρ = deepcopy(params.opt.step_size_min) # initialize ρ as the minimum allowed step size
     μ = 10 # from Boyd's book (make options later)
     τ = 2
 
@@ -19,14 +20,14 @@ function solve!(params::ModelParams)
         max_iter_time = 0.0
         params.init_obj_value = 0.0 # reset to zero
 
-        y_slice = @view y[params.model.problem_size.con_counter+1:end]
+        y_slice = @view y[n_con+1:end]
 
         for i = 1:nb
-            params.method != DualDecomposition && update_primal!(params.init_blocks[i], x)
+            if params.method != DualDecomposition
+                update_primal!(params.init_blocks[i], x)
+                params.opt.dynamic_step_size == true && update_rho!(params.init_blocks[i], ρ)
+            end
             update_dual!(params.init_blocks[i], y_slice)
-            params.method != DualDecomposition &&
-                params.opt.dynamic_step_size == true &&
-                update_rho!(params.init_blocks[i], ρ)
 
             optimize_block!(params.init_solver[i], params.results[i])
 
@@ -51,8 +52,7 @@ function solve!(params::ModelParams)
         mul!(params.pr_res, params.A, x)
         axpy!(-1.0, params.b, params.pr_res)
 
-        y[params.model.problem_size.con_counter+1:end] +=
-            params.opt.damping_param * ρ .* params.pr_res
+        y[n_con+1:end] += params.opt.damping_param * ρ .* params.pr_res
 
         # update dual_res
         jac_coord!(params.full_model, x, params.jac[3])
@@ -74,7 +74,7 @@ function solve!(params::ModelParams)
         params.tired =
             elapsed_time > params.opt.max_wall_time || iter_count >= params.opt.max_iter
         params.converged =
-            norm(params.dl_res) <= params.opt.dl_feas_tol &&
+            norm(params.dl_res) <= params.opt.du_feas_tol &&
             norm(params.pr_res) <= params.opt.pr_feas_tol
 
         params.obj_value = obj(params.full_model, x)

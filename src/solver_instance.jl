@@ -1,4 +1,4 @@
-mutable struct ModelParams
+mutable struct SolverInstance
     method::Type{<:AbstractBlockNLPSolver}
 
     opt::AbstractOptions
@@ -34,7 +34,7 @@ end
 """
         solve(
             model::AbstractBlockNLPModel,
-            method::AbstractBlockNLPSolver;
+            method::Type{<:AbstractBlockNLPSolver};
             options...
         )
 Solves a `BlockNLPModel` with the specified `AbstractBlockNLPSolver` method.
@@ -42,7 +42,7 @@ Solves a `BlockNLPModel` with the specified `AbstractBlockNLPSolver` method.
 # Arguments
 
 - `model::AbstractBlockNLPModel`: identifier for the `BlockNLPModel` 
-- `method::AbstractBlockNLPSolver`: solution algorithm
+- `method::Type{<:AbstractBlockNLPSolver}`: solution algorithm
 - `options`: solver options, optional
 """
 function solve(
@@ -57,7 +57,7 @@ end
 """
         initialize(
             model::AbstractBlockNLPModel,
-            method::AbstractBlockNLPSolver;
+            method::Type{<:AbstractBlockNLPSolver};
             options...
         )
 Initializes a `ModelParams` object for the iterative solver.
@@ -65,7 +65,7 @@ Initializes a `ModelParams` object for the iterative solver.
 # Arguments
 
 - `model::AbstractBlockNLPModel`: identifier for the `BlockNLPModel` 
-- `method::AbstractBlockNLPSolver`: solution algorithm
+- `method::Type{<:AbstractBlockNLPSolver}`: solution algorithm
 - `options`: solver options, optional
 """
 function initialize(
@@ -156,7 +156,7 @@ function initialize(
         ],
     ))
 
-    return ModelParams(
+    return SolverInstance(
         method,
         opt,
         start_time,

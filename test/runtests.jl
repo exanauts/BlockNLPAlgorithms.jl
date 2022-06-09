@@ -61,7 +61,6 @@ for i = 1:2N
         if i == 2N
             set_lower_bound(x[1], -0.001)
             set_upper_bound(x[1], 0.001)
-            # @constraint(mpc_block, -0.001 <= x[1] <= 0.001)
         end
         @objective(mpc_block, Min, dot(x, Q, x))
         nlp = MathOptNLPModel(mpc_block)
@@ -139,7 +138,6 @@ admm_solution = solve(
     subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
 )
 
-
 prox_admm_solution = solve(
     block_mpc,
     BlockNLPAlgorithms.ProxADMM;
@@ -152,7 +150,7 @@ prox_admm_solution = solve(
 )
 
 @testset "Check solver accuracy" begin
-    @test ceil(prox_admm_solution.objective) ≈
-          round(admm_solution.objective) ≈
-          round(dual_solution.objective)
+    @test round(prox_admm_solution.objective; digits = 3) ≈
+    round(prox_admm_solution.objective; digits = 3) ≈
+    round(prox_admm_solution.objective; digits = 3)
 end

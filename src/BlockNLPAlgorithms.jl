@@ -1,6 +1,6 @@
 module BlockNLPAlgorithms
-abstract type AbstractBlockNLPSolver end
 abstract type AbstractBlockSolver end
+abstract type AbstractBlockNLPSolver <: AbstractBlockSolver end
 
 struct ADMM <: AbstractBlockNLPSolver end
 struct DualDecomposition <: AbstractBlockNLPSolver end
@@ -20,7 +20,7 @@ export MadNLPSolver, IpoptSolver
 
 include("block_solvers.jl")
 include("options.jl")
-include("model_params.jl")
+include("solver_instance.jl")
 include("main_solver.jl")
 
 end # module
