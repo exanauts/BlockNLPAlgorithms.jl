@@ -1,6 +1,11 @@
 # BlockNLPAlgorithms.jl
 This package implements several popular decomposition algorithms for block-structured nonlinear optimization problems (NLPs). This package requires the NLPs to be implemented as `AbstractBlockNLPModels`; for more details on modeling block-structured NLPs, please refer to the documentation of [BlockNLPModels.jl](https://github.com/exanauts/BlockNLPModels.jl).
 
+## Available Decomposition Algorithms
+1. [Dual Decomposition Algorithm](http://www.seas.ucla.edu/~vandenbe/236C/lectures/dualdecomp.pdf)
+2. [Alternating Direction Method of Multipliers or ADMM](https://stanford.edu/~boyd/admm.html)
+3. [Proximal ADMM](http://alpha.math.uga.edu/~mjlai/papers/DLPYfinal.pdf)
+
 ## Installation
 This package is currently under active development and has not been registered yet. However, to access the current code, one can enter the following command in Julia REPL:
 
@@ -13,11 +18,6 @@ To confirm if the package was installed correctly, please run:
 test BlockNLPAlgorithms
 ```
 The test code generates and solves a small instance of a `BlockNLPModel` with all the implemented algorithms using [MadNLP.jl](https://github.com/MadNLP/MadNLP.jl) as the subproblem solver.
-
-## Implemented Decomposition Algorithms
-1. [Dual Decomposition Algorithm](http://www.seas.ucla.edu/~vandenbe/236C/lectures/dualdecomp.pdf)
-2. [Alternating Direction Method of Multipliers or ADMM](https://stanford.edu/~boyd/admm.html)
-3. [Proximal ADMM](http://alpha.math.uga.edu/~mjlai/papers/DLPYfinal.pdf)
 
 ## Quickstart Guide
 To solve a `AbstractBlockNLPModel` with a decomposition algorithms implemented in this package, one can use the following method:
