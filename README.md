@@ -1,5 +1,5 @@
 # BlockNLPAlgorithms.jl
-This package implements several popular decomposition algorithms for block-structured nonlinear optimization problems (NLPs). This package requires the NLPs to be implemented as `AbstractBlockNLPModels`; for more details on modeling block-structured NLPs, please refer to the documentation of [BlockNLPModels.jl](https://github.com/exanauts/BlockNLPModels.jl).
+This package implements several popular decomposition algorithms for block-structured nonlinear optimization problems (NLPs). It requires the NLPs to be implemented as `AbstractBlockNLPModels`; for more details on modeling block-structured NLPs, please refer to the documentation of [BlockNLPModels.jl](https://github.com/exanauts/BlockNLPModels.jl).
 
 ## Available Decomposition Algorithms
 1. [Dual Decomposition Algorithm](http://www.seas.ucla.edu/~vandenbe/236C/lectures/dualdecomp.pdf)
@@ -17,19 +17,19 @@ To confirm if the package was installed correctly, please run:
 ```julia
 test BlockNLPAlgorithms
 ```
-The test code generates and solves a small instance of a `BlockNLPModel` with all the implemented algorithms using [MadNLP.jl](https://github.com/MadNLP/MadNLP.jl) as the subproblem solver.
+The test code generates and solves a small instance of a `BlockNLPModel` with both dual decomposition and ADMM, using [MadNLP.jl](https://github.com/MadNLP/MadNLP.jl) to solve the subproblems.
 
 ## Quickstart Guide
 To solve a `AbstractBlockNLPModel` with a decomposition algorithms implemented in this package, one can use the following method:
 
 `solve(model::AbstractBlockNLPModel,method::Type{<:AbstractBlockNLPSolver};options...)`, where
 
-- `model` is the block nlp
+- `model` is the block NLP
 - `method` refers to the choice of the decomposition algorithms, user can choose one of the three available options:
-    - BlockNLPAlgorithms.DualDecomposition
-    - BlockNLPAlgorithms.ADMM
-    - BlockNLPAlgorithms.ProxADMM
-- `options` are the optional arguments to customize the behavior of decomposition solver. Available solver options are listed in the next subsection.
+    - `BlockNLPAlgorithms.DualDecomposition`
+    - `BlockNLPAlgorithms.ADMM`
+    - `BlockNLPAlgorithms.ProxADMM`
+- `options` are the optional arguments to customize the behavior of the decomposition solver. Available solver options are listed in the next subsection.
 
 
 ### Solver options

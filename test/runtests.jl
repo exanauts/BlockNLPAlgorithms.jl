@@ -150,7 +150,8 @@ prox_admm_solution = solve(
 )
 
 @testset "Check solver accuracy" begin
-    @test round(prox_admm_solution.objective; digits = 3) ≈
-    round(prox_admm_solution.objective; digits = 3) ≈
-    round(prox_admm_solution.objective; digits = 3)
+    @test round(prox_admm_solution.objective; digits = 3) ≈ 
+    round(prox_admm_solution.objective; digits = 3) atol = 1e-3
+    @test round(prox_admm_solution.objective; digits = 3) ≈ 
+    round(prox_admm_solution.objective; digits = 3) atol = 1e-3 
 end
