@@ -22,14 +22,17 @@ end
     dual_start::Vector{Float64}
 
     # Iteration options
-    step_size::Float64 = 1e-1
+    dynamic_step_size::Bool = false
+    step_size_min::Float64 = 5e-1
+    step_size_max::Float64 = 100
     damping_param::Float64 = 1
     update_scheme::Symbol = :GAUSS_SEIDEL
     subproblem_solver::AbstractBlockSolver = MadNLPSolver()
+    proximal_penalty::Union{AbstractArray,UniformScaling} = 1e-3 .* I
 
     # Termination options
-    feas_tol::Float64 = 1e-4
-    obj_conv_tol::Float64 = 1e-4
+    pr_feas_tol::Float64 = 1e-4
+    du_feas_tol::Float64 = 1e-4
     max_iter::Int = 100
     max_wall_time::Float64 = 600.0
 end
