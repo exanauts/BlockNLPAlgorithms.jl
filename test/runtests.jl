@@ -9,6 +9,8 @@ using NLPModelsJuMP
 using Test
 using MadNLP
 
+include("MySolver.jl")
+
 """
 Solves the following model predictive control problem:
 ```math
@@ -91,9 +93,8 @@ function BlockNLPAlgorithms.initialize_solver(
     nlp_blocks::Vector{<:AbstractNLPModel},
 )
     nb = length(nlp_blocks)
-    ips = Vector{MadNLP.InteriorPointSolver}(undef, nb)
+    ips = [MadNLP.InteriorPointSolver(nlp_blocks[i]; solver.options...) for i in 1:nb]
     for i = 1:nb
-        ips[i] = MadNLP.InteriorPointSolver(nlp_blocks[i]; solver.options...)
         MadNLP.initialize!(ips[i].kkt)
         MadNLP.initialize!(ips[i])
     end
@@ -129,10 +130,10 @@ admm_solution = solve(
     block_mpc,
     BlockNLPAlgorithms.ADMM;
     primal_start = zeros(Float64, 2 * N),
-    max_iter = 1000,
+    max_iter = 2500,
     dynamic_step_size = true,
     step_size_min = 0.5,
-    max_wall_time = 100.0,
+    max_wall_time = 500.0,
     update_scheme = :GAUSS_SEIDEL,
     verbosity = 1,
     subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
@@ -149,9 +150,26 @@ prox_admm_solution = solve(
     subproblem_solver = MadNLPSolver(print_level = MadNLP.WARN),
 )
 
+my_solver_solution = solve(
+    block_mpc,
+    BlockNLPAlgorithms.ADMM;
+    primal_start = zeros(Float64, 2 * N),
+    max_iter = 2500,
+    dynamic_step_size = true,
+    step_size_min = 0.5,
+    max_wall_time = 600.0,
+    update_scheme = :GAUSS_SEIDEL,
+    verbosity = 1,
+    subproblem_solver = MySolver(),
+)
+
+println(my_solver_solution.objective)
+println(prox_admm_solution.objective)
 @testset "Check solver accuracy" begin
-    @test round(prox_admm_solution.objective; digits = 3) ≈ 
-    round(prox_admm_solution.objective; digits = 3) atol = 1e-3
-    @test round(prox_admm_solution.objective; digits = 3) ≈ 
-    round(prox_admm_solution.objective; digits = 3) atol = 1e-3 
+    @test dual_solution.objective ≈ 
+    admm_solution.objective atol = 1e-3
+    @test admm_solution.objective ≈ 
+    prox_admm_solution.objective atol = 1e-3 
+    @test my_solver_solution.objective ≈
+    prox_admm_solution.objective atol = 1 # my solver is slightly less accurate
 end

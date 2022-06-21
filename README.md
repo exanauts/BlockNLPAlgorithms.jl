@@ -29,8 +29,10 @@ To solve a `AbstractBlockNLPModel` with a decomposition algorithms implemented i
     - `BlockNLPAlgorithms.DualDecomposition`
     - `BlockNLPAlgorithms.ADMM`
     - `BlockNLPAlgorithms.ProxADMM`
-- `options` are the optional arguments to customize the behavior of the decomposition solver. Available solver options are listed in the next subsection.
+- `options` are the optional arguments to customize the behavior of the decomposition solver. Available solver options are listed in the "Solver Options" subsection.
 
+### Instructions for interfacing a subproblem solver
+This package allows the user to provide their own subproblem solver. As an illustrative example, we show the steps to interface this package with a projected gradient descent based solver in `MySolver.jl` file in the `test` directory.
 
 ### Solver options
 
@@ -61,9 +63,6 @@ To solve a `AbstractBlockNLPModel` with a decomposition algorithms implemented i
 `max_iter::Int`: Maximum number of algorithm iterations. Solver terminates with exit status `:Maximum_Iterations_Exceeded` if primal and dual feasibility termination criteria tolerances are not met and decomposition algorithm's iteration count exceeds `max_iter`. The default value for this option is 100.
 
 `max_wall_time::Float64`: Maximum wall time (in seconds) for the decomposition algorithm. Solver terminates with exit status `:Maximum_WallTime_Exceeded` if primal and dual feasibility termination criteria tolerances are not met and decomposition algorithm's iteration count exceeds `max_wall_time`. The default value for this option is 600 s.
-
-### Steps for interfacing a subproblem solver
-This package allows the user to provide use own subproblem solver. As an illustrative example, here we show the steps to interface this package with a projected gradient descent based solver for bound constrained quadratic programs (To-Do).
 
 ## Acknowledgements
 This package's development was supported by the Exascale Computing Project (17-SC-20-SC), a joint project of the U.S. Department of Energy’s Office of Science and National Nuclear Security Administration, responsible for delivering a capable exascale ecosystem, including software, applications, and hardware technology, to support the nation’s exascale computing imperative.

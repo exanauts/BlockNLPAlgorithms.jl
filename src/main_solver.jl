@@ -30,7 +30,7 @@ function solve!(params::SolverInstance)
             update_dual!(params.init_blocks[i], y_slice)
 
             optimize_block!(params.init_solver[i], params.results[i])
-
+            
             if params.opt.update_scheme == :GAUSS_SEIDEL
                 x[params.model.blocks[i].var_idx] = params.results[i].solution
             elseif params.opt.update_scheme == :JACOBI
