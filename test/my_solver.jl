@@ -1,5 +1,5 @@
 struct MySolver <: AbstractBlockSolver
-    MySolver() = begin
+    function MySolver()
         @warn "This solver does not provide dual variable information."
         new()
     end
@@ -38,7 +38,8 @@ function BlockNLPAlgorithms.optimize_block!(
     while !converged
         iter += 1
         # make a gradient step
-        init_sol.pr_sol -= alpha .* grad!(init_sol.nlp, init_sol.pr_sol, init_sol.grad)
+        grad!(init_sol.nlp, init_sol.pr_sol, init_sol.grad)
+        init_sol.pr_sol -= alpha .* init_sol.grad
         # project
         for i = 1:length(init_sol.pr_sol)
             if init_sol.pr_sol[i] >= init_sol.nlp.meta.uvar[i]

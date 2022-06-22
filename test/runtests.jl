@@ -9,7 +9,7 @@ using NLPModelsJuMP
 using Test
 using MadNLP
 
-include("MySolver.jl")
+include("my_solver.jl")
 
 """
 Solves the following model predictive control problem:
@@ -163,8 +163,6 @@ my_solver_solution = solve(
     subproblem_solver = MySolver(),
 )
 
-println(my_solver_solution.objective)
-println(prox_admm_solution.objective)
 @testset "Check solver accuracy" begin
     @test dual_solution.objective ≈ 
     admm_solution.objective atol = 1e-3
